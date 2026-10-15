@@ -134,27 +134,22 @@ class BiliEntryJsonParserTest {
 
     // endregion
 
-    // region parseOrError
+    // region parseOrNullStrict
 
     @Test
-    fun `parseOrError with empty string returns failure`() {
-        val result = BiliEntryJsonParser.parseOrError("")
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
-        assertEquals("entry.json 文件内容为空", result.exceptionOrNull()!!.message)
+    fun `parseOrNullStrict with empty string returns null`() {
+        val result = BiliEntryJsonParser.parseOrNullStrict("")
+        assertNull(result)
     }
 
     @Test
-    fun `parseOrError with malformed json returns failure with message`() {
-        val result = BiliEntryJsonParser.parseOrError("bad json")
-        assertTrue(result.isFailure)
-        val message = result.exceptionOrNull()!!.message
-        assertNotNull(message)
-        assertTrue(message!!.contains("entry.json 解析失败"))
+    fun `parseOrNullStrict with malformed json returns null`() {
+        val result = BiliEntryJsonParser.parseOrNullStrict("bad json")
+        assertNull(result)
     }
 
     @Test
-    fun `parseOrError with valid json returns success`() {
+    fun `parseOrNullStrict with valid json returns parsed object`() {
         val json = """
             {
                 "is_completed": true,
@@ -169,9 +164,9 @@ class BiliEntryJsonParserTest {
             }
         """.trimIndent()
 
-        val result = BiliEntryJsonParser.parseOrError(json)
-        assertTrue(result.isSuccess)
-        assertEquals("成功测试", result.getOrNull()!!.title)
+        val result = BiliEntryJsonParser.parseOrNullStrict(json)
+        assertNotNull(result)
+        assertEquals("成功测试", result!!.title)
     }
 
     // endregion
@@ -204,5 +199,49 @@ class BiliEntryJsonParserTest {
         val result = BiliEntryJsonParser.parseOrNull(json)
         assertNotNull(result)
         assertEquals("视频标题第一集", result!!.name)
+    }
+
+    @Test
+    fun `parseOrNull with numeric season_id still parses`() {
+        val json = """
+            {
+                "is_completed": true,
+                "total_bytes": 1024,
+                "downloaded_bytes": 1024,
+                "title": "season_id类型测试",
+                "cover": "http://example.com/cover.jpg",
+                "prefered_video_quality": 80,
+                "guessed_total_bytes": 1024,
+                "total_time_milli": 60000,
+                "danmaku_count": 100,
+                "season_id": 0
+            }
+        """.trimIndent()
+
+        val result = BiliEntryJsonParser.parseOrNull(json)
+        assertNotNull(result)
+        assertEquals("0", result!!.season_id)
+    }
+
+    @Test
+    fun `parseOrNullStrict with numeric season_id still parses`() {
+        val json = """
+            {
+                "is_completed": true,
+                "total_bytes": 1024,
+                "downloaded_bytes": 1024,
+                "title": "season_id类型测试",
+                "cover": "http://example.com/cover.jpg",
+                "prefered_video_quality": 80,
+                "guessed_total_bytes": 1024,
+                "total_time_milli": 60000,
+                "danmaku_count": 100,
+                "season_id": 0
+            }
+        """.trimIndent()
+
+        val result = BiliEntryJsonParser.parseOrNullStrict(json)
+        assertNotNull(result)
+        assertEquals("0", result!!.season_id)
     }
 }

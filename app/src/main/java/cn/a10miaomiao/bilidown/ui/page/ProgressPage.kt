@@ -10,10 +10,15 @@ import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import cn.a10miaomiao.bilidown.ui.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +34,7 @@ import androidx.core.content.FileProvider
 import androidx.navigation.NavHostController
 import cn.a10miaomiao.bilidown.BiliDownApp
 import cn.a10miaomiao.bilidown.common.BiliDownOutFile
+import cn.a10miaomiao.bilidown.common.ExportLog
 import cn.a10miaomiao.bilidown.common.UrlUtil
 import cn.a10miaomiao.bilidown.common.molecule.collectAction
 import cn.a10miaomiao.bilidown.common.molecule.rememberPresenter
@@ -270,6 +276,7 @@ fun ProgressPage(
     var reconfirmRemoveDialogAction by remember {
         mutableStateOf<ProgressPageAction.RemoveTask?>(null)
     }
+    var showLogDialog by remember { mutableStateOf(false) }
     ReconfirmRemoveDialog(
         channel = channel,
         action = reconfirmRemoveDialogAction,
@@ -282,10 +289,26 @@ fun ProgressPage(
         contentPadding = PaddingValues(bottom = 80.dp),
     ) {
         item("TaskProgress-head") {
-            Text(
-                text = "正在进行",
-                modifier = Modifier.padding(10.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = "正在进行")
+                if (ExportLog.entries.isNotEmpty()) {
+                    TextButton(onClick = { showLogDialog = true }) {
+                        Icon(
+                AppIcons.Description,
+                            contentDescription = "日志",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("日志 (${ExportLog.entries.size})")
+                    }
+                }
+            }
         }
         item("TaskProgress") {
             TaskProgress(status = state.status)
@@ -317,5 +340,52 @@ fun ProgressPage(
             }
         }
 
+    }
+    if (showLogDialog) {
+        val context = LocalContext.current
+        val logText = ExportLog.formatForCopy()
+        AlertDialog(
+            onDismissRequest = { showLogDialog = false },
+            title = { Text("导出日志") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (ExportLog.entries.isEmpty()) {
+                        Text("暂无日志", color = MaterialTheme.colorScheme.outline)
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = ExportLog.entries.joinToString("\n") { e ->
+                                    "[${e.level.name}] ${e.message}"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLogDialog = false }) {
+                    Text("关闭")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("export_log", logText))
+                        Toast.makeText(context, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                Icon(AppIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("一键复制")
+                }
+            }
+        )
     }
 }

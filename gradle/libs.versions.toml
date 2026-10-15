@@ -22,7 +22,8 @@ protoc = "3.12.0"
 serialization = "1.6.2"
 precompose = "1.6.0-rc02"
 shizuku = "13.1.5"
-rxffmpeg = "4.9.0"
+ffmpegkit = "6.0.3"
+smartexception = "0.2.1"
 molecule = "1.4.1"
 
 # test
@@ -80,7 +81,8 @@ grpc-protobuf-lite = { group = "io.grpc", name = "grpc-protobuf-lite", version.r
 grpc-stub = { group = "io.grpc", name = "grpc-stub", version.ref = "grpc" }
 protoc = { group = "com.google.protobuf", name = "protoc", version.ref = "protoc" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref="serialization" }
-rxffmpeg = { group = "com.github.microshow", name = "RxFFmpeg", version.ref = "rxffmpeg" }
+ffmpegkit-min = { group = "dev.ffmpegkit-maintained", name = "ffmpeg-kit-min", version.ref = "ffmpegkit" }
+smart-exception-java = { group = "com.arthenica", name = "smart-exception-java", version.ref = "smartexception" }
 shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
 shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
 

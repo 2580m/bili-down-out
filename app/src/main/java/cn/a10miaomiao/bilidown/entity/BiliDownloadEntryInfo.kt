@@ -3,6 +3,46 @@ package cn.a10miaomiao.bilidown.entity
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * 兼容新版 Bilibili 缓存：`season_id` 可能是字符串（旧版番剧），
+ * 也可能是数字（新版普通视频写 0）。统一归一化为字符串或 null。
+ */
+@OptIn(ExperimentalSerializationApi::class)
+object SeasonIdSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("SeasonId", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonDecoder = decoder as? JsonDecoder
+        if (jsonDecoder != null) {
+            return when (val element = jsonDecoder.decodeJsonElement()) {
+                is JsonNull -> null
+                is JsonPrimitive -> element.content
+                else -> null
+            }
+        }
+        return decoder.decodeString()
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeString(value)
+        }
+    }
+}
 
 @Serializable
 @Parcelize
@@ -30,6 +70,7 @@ data class BiliDownloadEntryInfo(
     val bvid: String? = null,
     val owner_id: Long? = null,
     var page_data: PageInfo? = null,
+    @Serializable(with = SeasonIdSerializer::class)
     val season_id: String? = null,
     val source: SourceInfo? = null,
     var ep: EpInfo? = null,

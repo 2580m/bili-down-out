@@ -16,6 +16,7 @@ data class DownloadInfo(
     val id: Long,
     val cid: Long,
     val type: DownloadType,
+    val time_create_stamp: Long = 0L,
     val items: MutableList<DownloadItemInfo>,
 //    val owner_id: Long,
 )

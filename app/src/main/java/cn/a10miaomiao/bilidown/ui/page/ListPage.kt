@@ -20,6 +20,7 @@ import cn.a10miaomiao.bilidown.common.datastore.rememberDataStorePreferencesFlow
 import cn.a10miaomiao.bilidown.common.molecule.collectAction
 import cn.a10miaomiao.bilidown.common.molecule.rememberPresenter
 import cn.a10miaomiao.bilidown.entity.BiliAppInfo
+import cn.a10miaomiao.bilidown.entity.SortMode
 import cn.a10miaomiao.bilidown.ui.BiliDownScreen
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -64,6 +65,8 @@ fun ListPagePresenter(
 @Composable
 fun ListPage(
     navController: NavHostController,
+    searchQuery: String = "",
+    sortMode: SortMode = SortMode.NONE,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -122,6 +125,8 @@ fun ListPage(
                 DownloadListPage(
                     navController = navController,
                     packageName = state.appList[page].packageName,
+                    searchQuery = searchQuery,
+                    sortMode = sortMode,
                 )
             }
         }

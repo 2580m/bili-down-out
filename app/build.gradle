@@ -14,10 +14,10 @@ android {
 
     defaultConfig {
         applicationId "cn.a10miaomiao.bilidown"
-        minSdk 21
+        minSdk 24
         targetSdk 35
         versionCode 100
-        versionName "1.0"
+        versionName "debug.release.1.0.7"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -139,7 +139,8 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.rxffmpeg)
+    implementation(libs.ffmpegkit.min)
+    implementation(libs.smart.exception.java)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
 

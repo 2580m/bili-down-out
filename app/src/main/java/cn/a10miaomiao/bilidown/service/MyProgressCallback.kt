@@ -2,6 +2,7 @@ package cn.a10miaomiao.bilidown.service
 
 import android.util.Log
 import cn.a10miaomiao.bilidown.callback.ProgressCallback
+import cn.a10miaomiao.bilidown.common.ExportLog
 import cn.a10miaomiao.bilidown.common.MiaoLog
 import cn.a10miaomiao.bilidown.entity.VideoOutInfo
 import cn.a10miaomiao.bilidown.state.AppState
@@ -12,6 +13,7 @@ class MyProgressCallback(
     val appState: AppState,
 ) : ProgressCallback.Stub() {
     override fun onStart(info: VideoOutInfo?) {
+        ExportLog.info("Shizuku onStart: name=${info?.name}, path=${info?.entryDirPath}")
         MiaoLog.debug { "onStart(${info})" }
         appState.putTaskStatus(
             TaskStatus.InProgress(
@@ -24,6 +26,7 @@ class MyProgressCallback(
     }
 
     override fun onFinish(info: VideoOutInfo?) {
+        ExportLog.info("Shizuku onFinish: name=${info?.name}")
         MiaoLog.debug { "onFinish(${info})" }
         appState.putTaskStatus(TaskStatus.InIdle)
         service.tryAddOutRecord(
@@ -40,6 +43,7 @@ class MyProgressCallback(
     }
 
     override fun onProgress(info: VideoOutInfo?, progress: Int, progressTime: Long) {
+        ExportLog.info("Shizuku onProgress: $progress%, ${progressTime}ms")
         MiaoLog.debug { "onProgress(_, $progress, $progressTime)" }
         val taskStatus = appState.taskStatus.value
         if (taskStatus is TaskStatus.InProgress) {
@@ -52,6 +56,7 @@ class MyProgressCallback(
     }
 
     override fun onError(info: VideoOutInfo?, message: String?) {
+        ExportLog.error("Shizuku onError: $message")
         MiaoLog.debug { "onError(${info}, $message)" }
         appState.putTaskStatus(TaskStatus.Error(
             appState.taskStatus.value,

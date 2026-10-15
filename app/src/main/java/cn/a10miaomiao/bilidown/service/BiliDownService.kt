@@ -10,6 +10,7 @@ import androidx.documentfile.provider.DocumentFile
 import cn.a10miaomiao.bilidown.BiliDownApp
 import cn.a10miaomiao.bilidown.common.BiliEntryJsonParser
 import cn.a10miaomiao.bilidown.common.CommandUtil
+import cn.a10miaomiao.bilidown.common.ExportLog
 import cn.a10miaomiao.bilidown.common.file.MiaoDocumentFile
 import cn.a10miaomiao.bilidown.db.AppDatabase
 import cn.a10miaomiao.bilidown.db.dao.OutRecord
@@ -17,8 +18,6 @@ import cn.a10miaomiao.bilidown.entity.BiliDownloadEntryInfo
 import cn.a10miaomiao.bilidown.shizuku.util.RemoteServiceUtil
 import cn.a10miaomiao.bilidown.state.AppState
 import cn.a10miaomiao.bilidown.state.TaskStatus
-import io.microshow.rxffmpeg.RxFFmpegCommandList
-import io.microshow.rxffmpeg.RxFFmpegInvoke
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -100,21 +99,27 @@ class BiliDownService :
     ): Boolean {
         val taskStatus = appState.taskStatus.value
         val shizukuState = appState.shizukuState.value
+        ExportLog.clear()
+        ExportLog.info("开始导出: path=$entryDirPath, out=${outFile.path}, shizuku=${shizukuState.isEnabled}")
         if (taskStatus != TaskStatus.InIdle && taskStatus !is TaskStatus.Error) {
+            ExportLog.warn("导出被阻止：当前状态=$taskStatus")
             toast("有视频正在导出中，请稍后再试")
             return false
         }
 
         val t = appDatabase.outRecordDao().findByPath(entryDirPath)
         if (t != null && t.status == OutRecord.STATUS_SUCCESS) {
+            ExportLog.info("该视频已导出过，跳过")
             toast("此视频已导出")
             return false
         }
         // 使用Shizuku
         if (shizukuState.isEnabled) {
+            ExportLog.info("使用 Shizuku 导出")
             val shizukuUserService = try {
                 RemoteServiceUtil.getUserService()
             } catch (e: TimeoutCancellationException) {
+                ExportLog.error("Shizuku 连接超时: ${e.message}")
                 e.printStackTrace()
                 toast("Shizuku连接超时！")
                 return false
@@ -125,38 +130,48 @@ class BiliDownService :
                 myProgressCallback,
             )
             if (errorMessage != null) {
+                ExportLog.error("Shizuku 导出返回错误: $errorMessage")
                 toast(errorMessage)
                 return false
             }
+            ExportLog.info("Shizuku 导出已启动")
             return true
         }
 
         // 使用DocumentFile
         if (entryDirPath.startsWith("content:")) {
+            ExportLog.info("使用 DocumentFile 导出")
             return copyAndExportBiliVideo(entryDirPath, outFile)
         }
 
         // 使用Java File API正常导出
         val entryDirFile = File(entryDirPath)
         val entryJsonFile = File(entryDirPath, "entry.json")
+        ExportLog.info("读取 entry.json: ${entryJsonFile.path}, 大小=${entryJsonFile.length()}B")
         val entry = BiliEntryJsonParser.parseOrNull(entryJsonFile.readText())
             ?: run {
+                ExportLog.error("entry.json 解析失败（为空或内容无效）")
                 toast("entry.json 文件为空或已损坏")
                 return false
             }
+        ExportLog.info("entry.json 解析成功: title=${entry.title}, type_tag=${entry.type_tag}, video_quality=${entry.video_quality}, media_type=${entry.media_type}")
 
         val videoDirPath = entryDirPath + "/" + entry.videoDirName
+        ExportLog.info("视频目录: $videoDirPath")
         val videoDir = File(videoDirPath)
         if (!videoDir.exists() || !videoDir.isDirectory) {
+            ExportLog.warn("视频目录不存在或不是目录，尝试查找直接 mp4 文件...")
             val videoFile = entryDirFile.listFiles().find {
                 it.isFile && it.name.startsWith(entry.videoDirName)
                         && it.name.endsWith(".mp4")
             }
             if (videoFile == null) {
+                ExportLog.error("找不到视频文件: videoDirName=${entry.videoDirName}")
                 toast("找不到视频文件夹：${entry.videoDirName}")
                 return false
             }
             // 直接复制mp4文件
+            ExportLog.info("找到直接 mp4 文件: ${videoFile.path}, 大小=${videoFile.length()}B, 开始复制")
             appState.putTaskStatus(
                 TaskStatus.Copying(
                     name = entry.name,
@@ -207,13 +222,17 @@ class BiliDownService :
             )
             return true
         } else {
+            ExportLog.info("m4s 音视频分离格式, videoDirName=${entry.videoDirName}")
             val videoFile = File(videoDir, "video.m4s")
             val audioFile = File(videoDir, "audio.m4s")
             if (!videoFile.exists()) {
+                ExportLog.error("video.m4s 不存在: ${videoFile.path}")
                 toast("找不到视频文件")
                 return false
             }
+            ExportLog.info("video.m4s: 大小=${videoFile.length()}B")
             if (!audioFile.exists()) {
+                ExportLog.info("audio.m4s 不存在, 仅复制视频")
                 appState.putTaskStatus(
                     TaskStatus.Copying(
                         name = entry.name,
@@ -227,6 +246,7 @@ class BiliDownService :
                 }
                 return true
             }
+            ExportLog.info("audio.m4s: 大小=${audioFile.length()}B, 开始 ffmpeg 合并")
             appState.putTaskStatus(
                 TaskStatus.InProgress(
                     name = entry.name,
@@ -249,14 +269,19 @@ class BiliDownService :
     ): Boolean {
         val entryDirFile = DocumentFile.fromTreeUri(this, Uri.parse(entryDirPath))!!
         val entryJsonFile = MiaoDocumentFile(this, entryDirFile, "/entry.json")
+        ExportLog.info("读取 entry.json (DocumentFile): ${entryJsonFile.path}")
         val entry = BiliEntryJsonParser.parseOrNull(entryJsonFile.readText())
             ?: run {
+                ExportLog.error("entry.json 解析失败（为空或内容无效）")
                 toast("entry.json 文件为空或已损坏")
                 return false
             }
+        ExportLog.info("entry.json 解析成功: title=${entry.title}, videoDirName=${entry.videoDirName}")
         val videoDir = MiaoDocumentFile(this, entryDirFile, "/${entry.videoDirName}")
+        ExportLog.info("视频目录 (DocumentFile): ${videoDir.path}")
 
         if (!videoDir.exists() || !videoDir.isDirectory) {
+            ExportLog.warn("视频目录不存在，尝试查找直接 mp4 文件...")
             val videoFile = entryDirFile.listFiles().find {
                 it.isFile && it.name?.startsWith(entry.videoDirName) == true
                         && it.name?.endsWith(".mp4") == true
@@ -457,21 +482,16 @@ class BiliDownService :
         if (!outFile.parentFile!!.exists()) {
             outFile.parentFile!!.mkdir()
         }
-        val commands = RxFFmpegCommandList().apply {
-            append("-i")
-            append(videoFile.absolutePath)
-            append("-i")
-            append(audioFile.absolutePath)
-            append("-c:v")
-            append("copy")
-            append("-strict")
-            append("experimental")
-            append(outFile.absolutePath)
-        }.build()
+        val commands = listOf(
+            "-i", videoFile.absolutePath,
+            "-i", audioFile.absolutePath,
+            "-c:v", "copy",
+            "-strict", "experimental",
+            outFile.absolutePath
+        )
         //开始执行FFmpeg命令
-        val myRxFFmpegSubscriber = object : MyRxFFmpegSubscriber(
+        val myFFmpegSubscriber = object : MyFFmpegSubscriber(
             appState,
-//            getTempPath()
         ) {
             override fun onFinish() {
                 val currentStatus = appState.taskStatus.value
@@ -489,9 +509,7 @@ class BiliDownService :
                 super.onFinish()
             }
         }
-        RxFFmpegInvoke.getInstance()
-            .runCommandRxJava(commands)
-            .subscribe(myRxFFmpegSubscriber)
+        myFFmpegSubscriber.execute(commands)
     }
 
     private fun mergerVideos(
@@ -510,19 +528,15 @@ class BiliDownService :
                 file -> "file ${CommandUtil.filePath(file)}"
         }.joinToString("\n")
         ffTxtFile.writeText(ffTxtContent)
-        val commands = RxFFmpegCommandList().apply {
-            append("-f")
-            append("concat")
-            append("-safe")
-            append("0")
-            append("-i")
-            append(ffTxtFile.absolutePath)
-            append("-c")
-            append("copy")
-            append(outFile.absolutePath)
-        }.build()
+        val commands = listOf(
+            "-f", "concat",
+            "-safe", "0",
+            "-i", ffTxtFile.absolutePath,
+            "-c", "copy",
+            outFile.absolutePath
+        )
         //开始执行FFmpeg命令
-        val myRxFFmpegSubscriber = object : MyRxFFmpegSubscriber(appState) {
+        val myFFmpegSubscriber = object : MyFFmpegSubscriber(appState) {
             override fun onFinish() {
                 val currentStatus = appState.taskStatus.value
                 launch {
@@ -539,9 +553,7 @@ class BiliDownService :
                 super.onFinish()
             }
         }
-        RxFFmpegInvoke.getInstance()
-            .runCommandRxJava(commands)
-            .subscribe(myRxFFmpegSubscriber)
+        myFFmpegSubscriber.execute(commands)
     }
 
     private suspend fun putOutRecord(

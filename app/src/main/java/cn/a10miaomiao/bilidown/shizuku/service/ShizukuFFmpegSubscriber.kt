@@ -1,11 +1,12 @@
 package cn.a10miaomiao.bilidown.shizuku.service
 
-import android.annotation.SuppressLint
 import android.os.Build
 import cn.a10miaomiao.bilidown.callback.ProgressCallback
 import cn.a10miaomiao.bilidown.common.CommandUtil
 import cn.a10miaomiao.bilidown.entity.VideoOutInfo
-import io.microshow.rxffmpeg.RxFFmpegSubscriber
+import com.arthenica.ffmpegkit.FFmpegSessionCompleteCallback
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -13,15 +14,31 @@ import java.nio.file.Paths
 import java.nio.file.attribute.PosixFilePermission
 
 
-class ShizukuRxFFmpegSubscriber(
+class ShizukuFFmpegSubscriber(
     val videoOutInfo: VideoOutInfo,
     val callback: ProgressCallback?
-) : RxFFmpegSubscriber() {
-    override fun onError(message: String?) {
+) {
+
+    fun execute(args: List<String>) {
+        FFmpegKit.executeWithArgumentsAsync(
+            args.toTypedArray(),
+            FFmpegSessionCompleteCallback { session ->
+                when {
+                    ReturnCode.isCancel(session.returnCode) -> onCancel()
+                    ReturnCode.isSuccess(session.returnCode) -> onFinish()
+                    else -> onError(session.failStackTrace)
+                }
+            },
+            null,
+            null
+        )
+    }
+
+    fun onError(message: String?) {
         callback?.onError(videoOutInfo, message)
     }
 
-    override fun onFinish() {
+    fun onFinish() {
         callback?.onFinish(videoOutInfo)
         val outFile = File(videoOutInfo.outFilePath)
         val ffTxtFile = File(outFile.parent, ".ff.txt")
@@ -34,11 +51,7 @@ class ShizukuRxFFmpegSubscriber(
         }
     }
 
-    override fun onProgress(progress: Int, progressTime: Long) {
-        callback?.onProgress(videoOutInfo, progress, progressTime)
-    }
-
-    override fun onCancel() {
+    fun onCancel() {
         callback?.onCancel(videoOutInfo)
     }
 

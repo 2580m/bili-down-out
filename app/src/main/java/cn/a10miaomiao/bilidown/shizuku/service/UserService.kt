@@ -13,13 +13,11 @@ import cn.a10miaomiao.bilidown.entity.BiliDownloadEntryAndPathInfo
 import cn.a10miaomiao.bilidown.entity.BiliDownloadEntryInfo
 import cn.a10miaomiao.bilidown.entity.VideoOutInfo
 import cn.a10miaomiao.bilidown.shizuku.IUserService
-import io.microshow.rxffmpeg.RxFFmpegCommandList
-import io.microshow.rxffmpeg.RxFFmpegInvoke
-import io.microshow.rxffmpeg.RxFFmpegSubscriber
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -128,8 +126,8 @@ class UserService: IUserService.Stub, CoroutineScope {
         val entryDirFile = File(entryDirPath)
         val entryJsonFile = File(entryDirPath, "entry.json")
         val outFile = File(outFilePath)
-        val entry = BiliEntryJsonParser.parseOrNull(entryJsonFile.readText())
-            ?: return "entry.json 文件为空或已损坏"
+        val json = Json { ignoreUnknownKeys = true }
+        val entry = json.decodeFromString<BiliDownloadEntryInfo>(entryJsonFile.readText())
         val videoDirPath = entryDirPath + "/" + entry.videoDirName
         val videoDir = File(videoDirPath)
         val videoOutInfo = VideoOutInfo(
@@ -138,7 +136,7 @@ class UserService: IUserService.Stub, CoroutineScope {
             name = outFile.name,
             cover = entry.cover,
         )
-        val myRxFFmpegSubscriber = ShizukuRxFFmpegSubscriber(
+        val ffmpegSubscriber = ShizukuFFmpegSubscriber(
             videoOutInfo, callback
         )
         if (!videoDir.exists() || !videoDir.isDirectory) {
@@ -174,11 +172,12 @@ class UserService: IUserService.Stub, CoroutineScope {
                 return "找不到视频文件：0.blv"
             }
             callback?.onStart(videoOutInfo)
-            mergerVideos(
-                blvFiles,
-                outFile,
-                myRxFFmpegSubscriber,
-            )
+            try {
+                mergerVideos(blvFiles, outFile, ffmpegSubscriber)
+            } catch (e: Exception) {
+                callback?.onError(videoOutInfo, "ffmpeg blv 合并启动失败: ${e.message}")
+                return null
+            }
             return null
         } else {
             val videoFile = File(videoDir, "video.m4s")
@@ -195,7 +194,12 @@ class UserService: IUserService.Stub, CoroutineScope {
                 return null
             }
             callback?.onStart(videoOutInfo)
-            mergerVideoAndAudio(videoFile, audioFile, outFile, myRxFFmpegSubscriber)
+            try {
+                mergerVideoAndAudio(videoFile, audioFile, outFile, ffmpegSubscriber)
+            } catch (e: Exception) {
+                callback?.onError(videoOutInfo, "ffmpeg 启动失败: ${e.message}")
+                return null
+            }
             return null
         }
     }
@@ -220,35 +224,29 @@ class UserService: IUserService.Stub, CoroutineScope {
         videoFile: File,
         audioFile: File,
         outFile: File,
-        subscriber: RxFFmpegSubscriber,
+        subscriber: ShizukuFFmpegSubscriber,
     ) {
-        if (outFile.parentFile!!.exists()){
-            outFile.parentFile!!.mkdir()
+        if (!outFile.parentFile!!.exists()){
+            outFile.parentFile!!.mkdirs()
         }
-        val commands = RxFFmpegCommandList().apply {
-            append("-i")
-            append(videoFile.absolutePath)
-            append("-i")
-            append(audioFile.absolutePath)
-            append("-c:v")
-            append("copy")
-            append("-strict")
-            append("experimental")
-            append(outFile.absolutePath)
-        }.build()
+        val commands = listOf(
+            "-i", videoFile.absolutePath,
+            "-i", audioFile.absolutePath,
+            "-c:v", "copy",
+            "-strict", "experimental",
+            outFile.absolutePath
+        )
         //开始执行FFmpeg命令
-        RxFFmpegInvoke.getInstance()
-            .runCommandRxJava(commands)
-            .subscribe(subscriber)
+        subscriber.execute(commands)
     }
 
     private fun mergerVideos(
         videoFiles: List<File>,
         outFile: File,
-        subscriber: RxFFmpegSubscriber,
+        subscriber: ShizukuFFmpegSubscriber,
     ) {
-        if (outFile.parentFile!!.exists()){
-            outFile.parentFile!!.mkdir()
+        if (!outFile.parentFile!!.exists()){
+            outFile.parentFile!!.mkdirs()
         }
         val ffTxtFile = File(outFile.parent, ".ff.txt")
         if (ffTxtFile.exists() && ffTxtFile.isDirectory) {
@@ -260,21 +258,15 @@ class UserService: IUserService.Stub, CoroutineScope {
         }.joinToString("\n")
         ffTxtFile.writeText(ffTxtContent)
 
-        val commands = RxFFmpegCommandList().apply {
-            append("-f")
-            append("concat")
-            append("-safe")
-            append("0")
-            append("-i")
-            append(ffTxtFile.absolutePath)
-            append("-c")
-            append("copy")
-            append(outFile.absolutePath)
-        }.build()
+        val commands = listOf(
+            "-f", "concat",
+            "-safe", "0",
+            "-i", ffTxtFile.absolutePath,
+            "-c", "copy",
+            outFile.absolutePath
+        )
         //开始执行FFmpeg命令
-        RxFFmpegInvoke.getInstance()
-            .runCommandRxJava(commands)
-            .subscribe(subscriber)
+        subscriber.execute(commands)
     }
 
 }

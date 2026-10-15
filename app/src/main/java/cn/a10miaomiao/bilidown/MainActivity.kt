@@ -17,7 +17,8 @@ import cn.a10miaomiao.bilidown.ui.MainComposeApp
 import cn.a10miaomiao.bilidown.shizuku.IUserService
 import cn.a10miaomiao.bilidown.shizuku.LocalShizukuPermission
 import cn.a10miaomiao.bilidown.shizuku.permission.ShizukuPermission
-import io.microshow.rxffmpeg.RxFFmpegInvoke
+import com.arthenica.ffmpegkit.FFmpegKitConfig
+import com.arthenica.ffmpegkit.Level
 import kotlinx.coroutines.launch
 import moe.tlaster.precompose.PreComposeApp
 import rikka.shizuku.Shizuku
@@ -33,7 +34,11 @@ class MainActivity : ComponentActivity(), Shizuku.OnRequestPermissionResultListe
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        RxFFmpegInvoke.getInstance().setDebug(true);
+        FFmpegKitConfig.enableLogCallback { log ->
+            if (log.level == Level.AV_LOG_ERROR || log.level == Level.AV_LOG_FATAL) {
+                MiaoLog.info { "ffmpeg: ${log.message.trim()}" }
+            }
+        }
         storagePermission = StoragePermission(this)
         shizukuPermission = ShizukuPermission(this)
         setContent {

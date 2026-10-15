@@ -29,6 +29,8 @@ import cn.a10miaomiao.bilidown.R
 import cn.a10miaomiao.bilidown.common.BiliDownFile
 import cn.a10miaomiao.bilidown.common.BiliDownUtils
 import cn.a10miaomiao.bilidown.common.MiaoLog
+import cn.a10miaomiao.bilidown.common.filterBySearchQuery
+import cn.a10miaomiao.bilidown.entity.applySort
 import cn.a10miaomiao.bilidown.common.datastore.DataStoreKeys
 import cn.a10miaomiao.bilidown.common.datastore.rememberDataStorePreferencesFlow
 import cn.a10miaomiao.bilidown.common.lifecycle.LaunchedLifecycleObserver
@@ -38,6 +40,7 @@ import cn.a10miaomiao.bilidown.common.molecule.rememberPresenter
 import cn.a10miaomiao.bilidown.entity.DownloadInfo
 import cn.a10miaomiao.bilidown.entity.DownloadItemInfo
 import cn.a10miaomiao.bilidown.entity.DownloadType
+import cn.a10miaomiao.bilidown.entity.SortMode
 import cn.a10miaomiao.bilidown.shizuku.localShizukuPermission
 import cn.a10miaomiao.bilidown.ui.BiliDownScreen
 import cn.a10miaomiao.bilidown.ui.components.DownloadListItem
@@ -178,6 +181,7 @@ fun DownloadListPagePresenter(
                             cid = cid,
                             id = id,
                             type = type,
+                            time_create_stamp = biliEntry.time_create_stamp,
                             items = mutableListOf(item)
                         )
                     )
@@ -230,6 +234,8 @@ fun DownloadListPagePresenter(
 fun DownloadListPage(
     navController: NavHostController,
     packageName: String,
+    searchQuery: String = "",
+    sortMode: SortMode = SortMode.NONE,
 ) {
     val context = LocalContext.current
     var showPermissionDialog by remember { mutableStateOf(false) }
@@ -408,11 +414,14 @@ fun DownloadListPage(
                 }
             }
         } else {
+            val filteredList = remember(state.list, searchQuery, sortMode) {
+                state.list.filterBySearchQuery(searchQuery).applySort(sortMode)
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 80.dp),
             ) {
-                items(state.list, { it.dir_path }) {
+                items(filteredList, { it.dir_path }) {
                     DownloadListItem(
                         item = it,
                         onClick = {

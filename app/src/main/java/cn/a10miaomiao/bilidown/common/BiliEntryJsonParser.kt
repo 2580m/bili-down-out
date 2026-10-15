@@ -13,44 +13,32 @@ object BiliEntryJsonParser {
 
     private val json = Json {
         ignoreUnknownKeys = true
-        isLenient = true
+        coerceInputValues = true
+    }
+
+    private val jsonStrict = Json {
+        ignoreUnknownKeys = true
     }
 
     /**
-     * 尝试解析 entry.json 内容。
-     *
-     * @param jsonString 从 entry.json 读取的原始字符串
-     * @return 解析成功返回 [BiliDownloadEntryInfo]，空内容或解析失败返回 null
+     * 尝试解析 entry.json 内容（兼容新版 Bilibili 缓存，自动转换字段类型）。
      */
     fun parseOrNull(jsonString: String): BiliDownloadEntryInfo? {
-        if (jsonString.isBlank()) {
-            return null
-        }
+        if (jsonString.isBlank()) return null
         return try {
             json.decodeFromString(BiliDownloadEntryInfo.serializer(), jsonString)
-        } catch (e: SerializationException) {
-            null
-        } catch (e: IllegalArgumentException) {
-            null
-        }
+        } catch (e: SerializationException) { null }
+        catch (e: IllegalArgumentException) { null }
     }
 
     /**
-     * 尝试解析 entry.json 内容，返回 [Result] 包装结果。
-     *
-     * @param jsonString 从 entry.json 读取的原始字符串
-     * @return [Result.success] 或包含错误信息的 [Result.failure]
+     * 用原始严格模式解析（与原版行为完全一致），仅检查空文件。
      */
-    fun parseOrError(jsonString: String): Result<BiliDownloadEntryInfo> {
-        if (jsonString.isBlank()) {
-            return Result.failure(IllegalArgumentException("entry.json 文件内容为空"))
-        }
+    fun parseOrNullStrict(jsonString: String): BiliDownloadEntryInfo? {
+        if (jsonString.isBlank()) return null
         return try {
-            Result.success(json.decodeFromString(BiliDownloadEntryInfo.serializer(), jsonString))
-        } catch (e: SerializationException) {
-            Result.failure(IllegalArgumentException("entry.json 解析失败：${e.message}", e))
-        } catch (e: IllegalArgumentException) {
-            Result.failure(IllegalArgumentException("entry.json 解析失败：${e.message}", e))
-        }
+            jsonStrict.decodeFromString(BiliDownloadEntryInfo.serializer(), jsonString)
+        } catch (e: SerializationException) { null }
+        catch (e: IllegalArgumentException) { null }
     }
 }
